@@ -9,41 +9,19 @@ error_color = Fore.RED
 info_color = Fore.YELLOW
 reset_color = Style.RESET_ALL
 
-klasor2 = "/root/Desktop/Serenity/"
-silinecek_dosyalar = ["httpx.txt", "nuclei.txt", "subdomain.txt"]
-
-# Dosyaları kontrol et ve sil
-for dosya_adı in silinecek_dosyalar:
-    dosya_yolu = os.path.join(klasor2, dosya_adı)
-    if os.path.exists(dosya_yolu):
-        try:
-            if os.path.isfile(dosya_yolu):
-                os.remove(dosya_yolu)
-                print(f"{dosya_adı} dosyası silindi.")
-            else:
-                os.rmdir(dosya_yolu)
-                print(f"{dosya_yolu} dizini silindi.")
-
-        except Exception as e:
-            print(f"{dosya_adı} dosyası/dizini silinirken bir hata oluştu: {str(e)}")
-
-bash_script = "./bash.sh"  # Bash betiğinin dosya yolu
+bash_script = "./bash.sh"
 
 # Bash betiği yüklü mü kontrol et
 if not os.path.exists(bash_script):
     try:
-        # Bash betiği yüklü değilse, yükleyip sonra çalıştır
         install_command = f"chmod +x {bash_script} && ./{bash_script}"
         result = subprocess.run(install_command, shell=True, check=True, text=True, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
-
-        # Çıktıyı yazdırın
         print("Çıkış kodu:", result.returncode)
         print("Çıkış:")
         print(result.stdout)
         print("Hata:")
         print(result.stderr)
-
     except subprocess.CalledProcessError as e:
         print("Hata oluştu:", e)
 else:
@@ -51,106 +29,70 @@ else:
 
 # Taranacak adreslerin listesini giriniz
 print(info_color + "Taranacak adreslerin listesini giriniz" + reset_color)
-dosya_yolu = input("Dosya yolunu girin: ")
+dosya_yolu = input("Dosya yolunu girin (örn: /root/Desktop/Serenity/sy-ub.txt): ")
 
-# Subdomain listesi taranıyor
-print(info_color + "Subdomain listesi taranıyor" + reset_color)
-print("****************************************************************")
+if not os.path.exists(dosya_yolu):
+    print(error_color + f"{dosya_yolu} bulunamadı!" + reset_color)
+    exit()
 
-komut = f"cd /root/go/bin && ./subfinder -dL {dosya_yolu} >> /root/Desktop/Serenity/subdomain.txt"
-exit_code = os.system(komut)
+with open(dosya_yolu, 'r') as f:
+    domainler = [line.strip() for line in f if line.strip()]
 
-if exit_code == 0:
-    print(success_color + f"'{komut}' komutu başarıyla çalıştırıldı. subdomain.txt dosyası oluşturuldu" + reset_color)
-else:
-    print(error_color + f"'{komut}' komutu çalıştırılırken bir hata oluştu. Çıkış kodu: {exit_code}" + reset_color)
+for domain in domainler:
+    print(info_color + f"\n==> {domain} için işlemler başlatılıyor..." + reset_color)
 
-# httpx
-print("################################################################")
-komut2 = f"cd /root/go/bin/ && cat '/root/Desktop/Serenity/subdomain.txt' | ./httpx >> /root/Desktop/Serenity/httpx.txt"
-exit_code = os.system(komut2)
+    klasor = f"/root/Desktop/Serenity/{domain}"
+    os.makedirs(klasor, exist_ok=True)
 
-if exit_code == 0:
-    print(success_color + f"'{komut2}' komutu başarıyla çalıştırıldı. httpx.txt dosyası oluşturuldu" + reset_color)
-else:
-    print(error_color + f"'{komut2}' komutu çalıştırılırken bir hata oluştu. Çıkış kodu: {exit_code}" + reset_color)
+    subfinder_output = f"{klasor}/subdomain.txt"
+    httpx_output = f"{klasor}/httpx.txt"
+    nuclei_output = f"{klasor}/nuclei.txt"
 
-# nuclei
-print("################################################################")
-komut3 = f"cd /root/go/bin/ && ./nuclei -l '/root/Desktop/Serenity/httpx.txt'  -o '/root/Desktop/Serenity/nuclei.txt'"
-exit_code = os.system(komut3)
+    # Subfinder
+    komut1 = f"cd /root/go/bin && ./subfinder -d {domain} >> {subfinder_output}"
+    if os.system(komut1) == 0:
+        print(success_color + f"Subfinder başarılı: {subfinder_output}" + reset_color)
+    else:
+        print(error_color + f"Subfinder hata verdi." + reset_color)
 
-if exit_code == 0:
-    print(success_color + f"'{komut3}' komutu başarıyla çalıştırıldı. nuclei.txt dosyası oluşturuldu" + reset_color)
-else:
-    print(error_color + f"'{komut3}' komutu çalıştırılırken bir hata oluştu. Çıkış kodu: {exit_code}" + reset_color)
+    # httpx
+    komut2 = f"cd /root/go/bin && cat '{subfinder_output}' | ./httpx >> {httpx_output}"
+    if os.system(komut2) == 0:
+        print(success_color + f"httpx başarılı: {httpx_output}" + reset_color)
+    else:
+        print(error_color + f"httpx hata verdi." + reset_color)
 
-# Tarama sonucu çıkan CVE listesi
-print("******************************************\n")
-print(info_color + "Tarama sonucu çıkan CVE listesi" + reset_color)
-komut4 = "awk '/CVE-[0-9]{4}-[0-9]{4,8}/ {print}' /root/Desktop/Serenity/nuclei.txt "
-sonuc4 = os.system(komut4)
-if sonuc4 == 0:
-    print(success_color + f"'{komut4}' başarıyla çalıştırıldı." + reset_color)
-else:
-    print(error_color + f"'{komut4}' çalıştırılırken bir hata oluştu. Çıkış kodu: {sonuc4}" + reset_color)
+    # nuclei
+    komut3 = f"cd /root/go/bin && ./nuclei -l '{httpx_output}' -o '{nuclei_output}'"
+    if os.system(komut3) == 0:
+        print(success_color + f"nuclei başarılı: {nuclei_output}" + reset_color)
+    else:
+        print(error_color + f"nuclei hata verdi." + reset_color)
 
-# Tarama sonucu çıkan low sonuçların listesi
-print("******************************************\n")
-print(info_color + "Tarama sonucu çıkan low sonuçların listesi" + reset_color)
-komut5 = "awk '/\[low\]/' /root/Desktop/Serenity/nuclei.txt "
-sonuc5 = os.system(komut5)
-if sonuc5 == 0:
-    print(success_color + f"'{komut5}' başarıyla çalıştırıldı." + reset_color)
-else:
-    print(error_color + f"'{komut5}' çalıştırılırken bir hata oluştu. Çıkış kodu: {sonuc5}" + reset_color)
+    # CVE ve Seviyeler
+    print("------ CVE BULGULARI ------")
+    os.system(f"awk '/CVE-[0-9]{{4}}-[0-9]{{4,8}}/' {nuclei_output}")
 
-# Tarama sonucu çıkan medium listesi
-print("################################################################")
-print(info_color + "Tarama sonucu çıkan medium listesi" + reset_color)
-komut6 = "awk '/\[medium\]/'  /root/Desktop/Serenity/nuclei.txt"
-sonuc6 = os.system(komut6)
-if sonuc6 == 0:
-    print(success_color + f"'{komut6}' başarıyla çalıştırıldı." + reset_color)
-else:
-    print(error_color + f"'{komut6}' çalıştırılırken bir hata oluştu. Çıkış kodu: {sonuc6}" + reset_color)
+    print("------ LOW BULGULARI ------")
+    os.system(rf"awk '/\[low\]/' {nuclei_output}")
 
-# Tarama sonucu çıkan high listesi
-print("################################################################")
-print(info_color + "Tarama sonucu çıkan high listesi" + reset_color)
-komut7 = "awk '/\[high\]/' /root/Desktop/Serenity/nuclei.txt"
-sonuc7 = os.system(komut7)
-if sonuc7 == 0:
-    print(success_color + f"'{komut7}' başarıyla çalıştırıldı." + reset_color)
-else:
-    print(error_color + f"'{komut7}' çalıştırılırken bir hata oluştu. Çıkış kodu: {sonuc7}" + reset_color)
+    print("------ MEDIUM BULGULARI ------")
+    os.system(rf"awk '/\[medium\]/' {nuclei_output}")
 
-# Tarama sonucu çıkan critical listesi
-print("################################################################")
-print(info_color + "Tarama sonucu çıkan critical listesi" + reset_color)
-komut8 = "awk '/\[critical\]/' /root/Desktop/Serenity/nuclei.txt "
-sonuc8 = os.system(komut8)
-if sonuc8 == 0:
-    print(success_color + f"'{komut8}' başarıyla çalıştırıldı." + reset_color)
-else:
-    print(error_color + f"'{komut8}' çalıştırılırken bir hata oluştu. Çıkış kodu: {sonuc8}" + reset_color)
+    print("------ HIGH BULGULARI ------")
+    os.system(rf"awk '/\[high\]/' {nuclei_output}")
 
-# Tarama sonucu çıkan unknown listesi
-print("################################################################")
-print(info_color + "Tarama sonucu çıkan unknown listesi" + reset_color)
-komut9 = "awk '/\[unknown\]/'  /root/Desktop/Serenity/nuclei.txt "
-sonuc9 = os.system(komut9)
-if sonuc9 == 0:
-    print(success_color + f"'{komut9}' başarıyla çalıştırıldı." + reset_color)
-else:
-    print(error_color + f"'{komut9}' çalıştırılırken bir hata oluştu. Çıkış kodu: {sonuc9}" + reset_color)
+    print("------ CRITICAL BULGULARI ------")
+    os.system(rf"awk '/\[critical\]/' {nuclei_output}")
+
+    print("------ UNKNOWN BULGULARI ------")
+    os.system(rf"awk '/\[unknown\]/' {nuclei_output}")
 
 # Ses dosyasını çalmak için kullanılacak fonksiyon
 def play_audio():
-    subprocess.run(["mpv", "fbı.mp3"])
+    subprocess.run(["mpv", "--loop", "fbı.mp3"])
 
 try:
-    while True:
-        subprocess.run(["mpv", "--loop", "fbı.mp3"])
+    play_audio()
 except KeyboardInterrupt:
     print("Ctrl+C tuş kombinasyonu algılandı. Çıkılıyor...")
